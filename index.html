@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="SpotKeeper — remember where you put everything. A private, offline tracker for your physical belongings.">
+<title>SpotKeeper — Remember where you put everything</title>
+<script>
+/* Pre-paint theme: localStorage only, never touches IndexedDB here,
+   so the database is created exactly once by db.js. */
+(function () {
+  try {
+    var saved = localStorage.getItem('spotkeeper-theme') || 'system';
+    var dark = saved === 'dark' || (saved === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    if (dark) document.documentElement.classList.add('dark');
+    document.documentElement.setAttribute('data-theme-pref', saved);
+  } catch (e) { /* storage unavailable: stay light */ }
+})();
+</script>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to main content</a>
+
+<div class="app">
+  <header class="sidebar" aria-label="Main navigation">
+    <div class="brand">
+      <svg class="brand-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a7 7 0 0 0-7 7c0 2.4 1.2 4.2 2.6 5.6.9.9 1.4 1.9 1.4 3.4h6c0-1.5.5-2.5 1.4-3.4C17.8 13.2 19 11.4 19 9a7 7 0 0 0-7-7zm-2 17h4v1.5a2 2 0 0 1-4 0V19z" fill="currentColor"/></svg>
+      <span class="brand-name">SpotKeeper</span>
+      <span class="brand-tag">Remember where you put everything</span>
+    </div>
+    <nav class="side-nav" aria-label="Sections">
+      <button type="button" class="nav-btn" data-nav="dashboard" aria-current="page">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1v-8.5z" fill="currentColor"/></svg>
+        <span>Dashboard</span>
+      </button>
+      <button type="button" class="nav-btn" data-nav="items">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zm3 4v2h10V8H7zm0 4v2h7v-2H7z" fill="currentColor"/></svg>
+        <span>My Items</span>
+      </button>
+      <button type="button" class="nav-btn" data-nav="locations">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a8 8 0 0 0-8 8c0 5.4 7 11.5 7.3 11.8a1 1 0 0 0 1.4 0C13 21.5 20 15.4 20 10a8 8 0 0 0-8-8zm0 11a3 3 0 1 1 0-6 3 3 0 0 1 0 6z" fill="currentColor"/></svg>
+        <span>Locations</span>
+      </button>
+      <button type="button" class="nav-btn" data-nav="settings">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.4 13a7.5 7.5 0 0 0 0-2l2-1.5a.5.5 0 0 0 .1-.6l-2-3.4a.5.5 0 0 0-.6-.2l-2.3 1a7.6 7.6 0 0 0-1.7-1L14.5 2a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 0-.5.5l-.4 2.3a7.6 7.6 0 0 0-1.7 1l-2.3-1a.5.5 0 0 0-.6.2l-2 3.4a.5.5 0 0 0 .1.6L4.6 11a7.5 7.5 0 0 0 0 2l-2 1.5a.5.5 0 0 0-.1.6l2 3.4c.1.2.4.3.6.2l2.3-1a7.6 7.6 0 0 0 1.7 1l.4 2.3c0 .3.2.5.5.5h4c.3 0 .5-.2.5-.5l.4-2.3a7.6 7.6 0 0 0 1.7-1l2.3 1c.2.1.5 0 .6-.2l2-3.4a.5.5 0 0 0-.1-.6L19.4 13zM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7z" fill="currentColor"/></svg>
+        <span>Settings</span>
+      </button>
+    </nav>
+    <p class="sidebar-note">Private by design. Your data stays in this browser.</p>
+  </header>
+
+  <main id="main" class="main" tabindex="-1">
+    <!-- Dashboard -->
+    <section id="section-dashboard" class="page" aria-labelledby="dashboard-heading">
+      <h1 id="dashboard-heading">Dashboard</h1>
+      <div class="stats" role="group" aria-label="Totals">
+        <div class="stat-card"><span class="stat-num" id="stat-items">0</span><span class="stat-label">Items tracked</span></div>
+        <div class="stat-card"><span class="stat-num" id="stat-locations">0</span><span class="stat-label">Locations</span></div>
+        <div class="stat-card"><span class="stat-num" id="stat-recent">0</span><span class="stat-label">Updated this week</span></div>
+      </div>
+      <div class="dashboard-grid">
+        <div class="card">
+          <h2>Find something fast</h2>
+          <form id="quick-search-form" role="search">
+            <label class="visually-hidden" for="quick-search">Search your items</label>
+            <input id="quick-search" type="search" placeholder="Search items, spots, notes…" autocomplete="off">
+            <button class="btn btn-primary" type="submit">Search</button>
+          </form>
+        </div>
+        <div class="card">
+          <h2>Recently updated</h2>
+          <ul id="recent-list" class="item-list"></ul>
+          <p id="recent-empty" class="empty-note" hidden>No items yet. Add your first item to see it here.</p>
+        </div>
+      </div>
+      <div id="first-run" class="card hero-empty" hidden>
+        <h2>Never lose track of your things again</h2>
+        <p>Record where each belonging lives, then find it in seconds when you need it. No account, no cloud, nothing leaves this browser.</p>
+        <button class="btn btn-primary" type="button" id="first-run-add">Add First Item</button>
+      </div>
+    </section>
+
+    <!-- My Items -->
+    <section id="section-items" class="page" aria-labelledby="items-heading" hidden>
+      <div class="page-head">
+        <h1 id="items-heading">My Items</h1>
+        <button class="btn btn-primary" type="button" id="items-add-btn">Add Item</button>
+      </div>
+      <div class="filters card">
+        <div class="filter-row">
+          <div class="field">
+            <label for="search-input">Search</label>
+            <input id="search-input" type="search" placeholder="Name, spot, notes, category, location…" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="filter-category">Category</label>
+            <select id="filter-category">
+              <option value="">All categories</option>
+              <option>Documents</option>
+              <option>Electronics</option>
+              <option>Clothing</option>
+              <option>Tools</option>
+              <option>Household</option>
+              <option>Other</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="filter-location">Location</label>
+            <select id="filter-location">
+              <option value="">All locations</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="sort-select">Sort by</label>
+            <select id="sort-select">
+              <option value="updated-desc">Recently Updated</option>
+              <option value="name-asc">Name A–Z</option>
+              <option value="name-desc">Name Z–A</option>
+              <option value="created-asc">Oldest Added</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <p id="items-count" class="result-count" aria-live="polite"></p>
+      <ul id="items-list" class="item-list"></ul>
+      <p id="items-empty" class="empty-note card" hidden>No items yet. Use “Add Item” to record where something lives.</p>
+      <p id="items-no-results" class="empty-note card" hidden>No items match your search and filters.</p>
+    </section>
+
+    <!-- Locations -->
+    <section id="section-locations" class="page" aria-labelledby="locations-heading" hidden>
+      <div class="page-head">
+        <h1 id="locations-heading">Locations</h1>
+        <button class="btn btn-primary" type="button" id="locations-add-btn">Add Location</button>
+      </div>
+      <p class="section-intro">A location is a named place where things live — a room, a drawer, a box, a shelf.</p>
+      <ul id="locations-list" class="location-list"></ul>
+      <p id="locations-empty" class="empty-note card" hidden>No locations yet. Add one first, then your items can live in it.</p>
+    </section>
+
+    <!-- Settings -->
+    <section id="section-settings" class="page" aria-labelledby="settings-heading" hidden>
+      <h1 id="settings-heading">Settings</h1>
+      <div class="settings-grid">
+        <div class="card">
+          <h2>Appearance</h2>
+          <div class="field">
+            <label for="theme-select">Theme</label>
+            <select id="theme-select">
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+              <option value="system">System</option>
+            </select>
+            <p class="hint">Saved in this browser and applied on your next visit.</p>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Backup &amp; restore</h2>
+          <p>Export everything as a JSON file, or restore from a backup. Import replaces all current data, and only after you confirm.</p>
+          <div class="btn-row">
+            <button class="btn btn-secondary" type="button" id="export-btn">Export backup (JSON)</button>
+            <button class="btn btn-secondary" type="button" id="import-btn">Import backup…</button>
+            <input type="file" id="import-file" accept="application/json,.json" hidden>
+          </div>
+          <p id="backup-status" class="hint" aria-live="polite"></p>
+        </div>
+        <div class="card">
+          <h2>Storage</h2>
+          <p id="storage-info">Storage usage is not available in this browser.</p>
+        </div>
+        <div class="card danger-zone">
+          <h2>Delete all data</h2>
+          <p>Permanently removes every item and location from this browser. This cannot be undone — export a backup first if you might need your data.</p>
+          <button class="btn btn-danger" type="button" id="delete-all-btn">Delete All Data…</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <nav class="bottom-nav" aria-label="Sections">
+    <button type="button" class="nav-btn" data-nav="dashboard" aria-current="page">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1v-8.5z" fill="currentColor"/></svg>
+      <span>Home</span>
+    </button>
+    <button type="button" class="nav-btn" data-nav="items">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zm3 4v2h10V8H7zm0 4v2h7v-2H7z" fill="currentColor"/></svg>
+      <span>Items</span>
+    </button>
+    <button type="button" class="nav-btn" data-nav="locations">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a8 8 0 0 0-8 8c0 5.4 7 11.5 7.3 11.8a1 1 0 0 0 1.4 0C13 21.5 20 15.4 20 10a8 8 0 0 0-8-8zm0 11a3 3 0 1 1 0-6 3 3 0 0 1 0 6z" fill="currentColor"/></svg>
+      <span>Places</span>
+    </button>
+    <button type="button" class="nav-btn" data-nav="settings">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.4 13a7.5 7.5 0 0 0 0-2l2-1.5a.5.5 0 0 0 .1-.6l-2-3.4a.5.5 0 0 0-.6-.2l-2.3 1a7.6 7.6 0 0 0-1.7-1L14.5 2a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 0-.5.5l-.4 2.3a7.6 7.6 0 0 0-1.7 1l-2.3-1a.5.5 0 0 0-.6.2l-2 3.4a.5.5 0 0 0 .1.6L4.6 11a7.5 7.5 0 0 0 0 2l-2 1.5a.5.5 0 0 0-.1.6l2 3.4c.1.2.4.3.6.2l2.3-1a7.6 7.6 0 0 0 1.7 1l.4 2.3c0 .3.2.5.5.5h4c.3 0 .5-.2.5-.5l.4-2.3a7.6 7.6 0 0 0 1.7-1l2.3 1c.2.1.5 0 .6-.2l2-3.4a.5.5 0 0 0-.1-.6L19.4 13zM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7z" fill="currentColor"/></svg>
+      <span>Settings</span>
+    </button>
+  </nav>
+</div>
+
+<!-- Item add / edit dialog -->
+<dialog id="item-dialog" class="dialog" aria-labelledby="item-dialog-title">
+  <form id="item-form" method="dialog" novalidate>
+    <h2 id="item-dialog-title">Add Item</h2>
+    <p id="item-form-error" class="form-error" role="alert" hidden></p>
+    <div class="field">
+      <label for="f-name">Item name <span class="required" aria-hidden="true">*</span></label>
+      <input id="f-name" name="name" type="text" maxlength="80" required autocomplete="off">
+      <p class="field-error" id="err-name" hidden></p>
+    </div>
+    <div class="field">
+      <label for="f-category">Category <span class="required" aria-hidden="true">*</span></label>
+      <select id="f-category" name="category" required>
+        <option value="">Choose a category</option>
+        <option>Documents</option>
+        <option>Electronics</option>
+        <option>Clothing</option>
+        <option>Tools</option>
+        <option>Household</option>
+        <option>Other</option>
+      </select>
+      <p class="field-error" id="err-category" hidden></p>
+    </div>
+    <div class="field">
+      <label for="f-location">Location <span class="required" aria-hidden="true">*</span></label>
+      <select id="f-location" name="location" required>
+        <option value="">Choose a location</option>
+      </select>
+      <p class="field-error" id="err-location" hidden></p>
+      <p class="hint" id="no-location-hint" hidden>You have no locations yet. <button type="button" class="link-btn" id="goto-add-location">Add a location first</button>.</p>
+    </div>
+    <div class="field">
+      <label for="f-spot">Specific spot <span class="optional">(optional)</span></label>
+      <input id="f-spot" name="spot" type="text" maxlength="120" autocomplete="off" placeholder="e.g. Top drawer, left side">
+      <p class="field-error" id="err-spot" hidden></p>
+    </div>
+    <div class="field">
+      <label for="f-notes">Notes <span class="optional">(optional)</span></label>
+      <textarea id="f-notes" name="notes" rows="3" maxlength="500" placeholder="Anything that helps you find it again"></textarea>
+      <p class="field-error" id="err-notes" hidden></p>
+    </div>
+    <div class="dialog-actions">
+      <button class="btn btn-secondary" type="button" data-close>Cancel</button>
+      <button class="btn btn-primary" type="submit" id="item-submit">Save Item</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Move dialog -->
+<dialog id="move-dialog" class="dialog" aria-labelledby="move-dialog-title">
+  <form id="move-form" method="dialog" novalidate>
+    <h2 id="move-dialog-title">Move Item</h2>
+    <p id="move-item-label"></p>
+    <p id="move-form-error" class="form-error" role="alert" hidden></p>
+    <div class="field">
+      <label for="f-move-location">Move to <span class="required" aria-hidden="true">*</span></label>
+      <select id="f-move-location" name="location" required></select>
+      <p class="field-error" id="err-move-location" hidden></p>
+    </div>
+    <div class="dialog-actions">
+      <button class="btn btn-secondary" type="button" data-close>Cancel</button>
+      <button class="btn btn-primary" type="submit">Move Item</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Item details dialog -->
+<dialog id="details-dialog" class="dialog" aria-labelledby="details-dialog-title">
+  <h2 id="details-dialog-title">Item Details</h2>
+  <dl id="details-list" class="details"></dl>
+  <div class="dialog-actions">
+    <button class="btn btn-secondary" type="button" data-close>Close</button>
+  </div>
+</dialog>
+
+<!-- Delete confirm dialog -->
+<dialog id="confirm-dialog" class="dialog" aria-labelledby="confirm-dialog-title">
+  <h2 id="confirm-dialog-title">Delete?</h2>
+  <p id="confirm-message"></p>
+  <div class="dialog-actions">
+    <button class="btn btn-secondary" type="button" data-close>Cancel</button>
+    <button class="btn btn-danger" type="button" id="confirm-yes">Delete</button>
+  </div>
+</dialog>
+
+<!-- Location add / edit dialog -->
+<dialog id="location-dialog" class="dialog" aria-labelledby="location-dialog-title">
+  <form id="location-form" method="dialog" novalidate>
+    <h2 id="location-dialog-title">Add Location</h2>
+    <p id="location-form-error" class="form-error" role="alert" hidden></p>
+    <div class="field">
+      <label for="f-loc-name">Location name <span class="required" aria-hidden="true">*</span></label>
+      <input id="f-loc-name" name="name" type="text" maxlength="60" required autocomplete="off" placeholder="e.g. Bedroom, Garage shelf, Blue folder">
+      <p class="field-error" id="err-loc-name" hidden></p>
+    </div>
+    <div class="field">
+      <label for="f-loc-desc">Description <span class="optional">(optional)</span></label>
+      <textarea id="f-loc-desc" name="description" rows="2" maxlength="200" placeholder="What lives here, in general"></textarea>
+      <p class="field-error" id="err-loc-desc" hidden></p>
+    </div>
+    <div class="dialog-actions">
+      <button class="btn btn-secondary" type="button" data-close>Cancel</button>
+      <button class="btn btn-primary" type="submit" id="location-submit">Save Location</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Location contents dialog -->
+<dialog id="location-items-dialog" class="dialog" aria-labelledby="location-items-title">
+  <h2 id="location-items-title">Location</h2>
+  <p id="location-items-desc" class="hint"></p>
+  <ul id="location-items-list" class="item-list"></ul>
+  <p id="location-items-empty" class="empty-note" hidden>Nothing stored here yet.</p>
+  <div class="dialog-actions">
+    <button class="btn btn-secondary" type="button" data-close>Close</button>
+  </div>
+</dialog>
+
+<!-- Import confirm dialog -->
+<dialog id="import-dialog" class="dialog" aria-labelledby="import-dialog-title">
+  <h2 id="import-dialog-title">Replace all data?</h2>
+  <p id="import-summary"></p>
+  <p>This backup will replace everything currently in SpotKeeper. Export a backup first if you want to keep your current data.</p>
+  <div class="dialog-actions">
+    <button class="btn btn-secondary" type="button" data-close>Cancel</button>
+    <button class="btn btn-primary" type="button" id="import-confirm">Replace Data</button>
+  </div>
+</dialog>
+
+<!-- Delete all dialog -->
+<dialog id="delete-all-dialog" class="dialog" aria-labelledby="delete-all-title">
+  <form id="delete-all-form" method="dialog" novalidate>
+    <h2 id="delete-all-title">Delete all data?</h2>
+    <p>This permanently removes every item and location. It cannot be undone.</p>
+    <p id="delete-all-error" class="form-error" role="alert" hidden></p>
+    <div class="field">
+      <label for="f-delete-word">Type <strong>DELETE</strong> to confirm</label>
+      <input id="f-delete-word" type="text" autocomplete="off" placeholder="DELETE">
+    </div>
+    <div class="dialog-actions">
+      <button class="btn btn-secondary" type="button" data-close>Cancel</button>
+      <button class="btn btn-danger" type="submit">Delete Everything</button>
+    </div>
+  </form>
+</dialog>
+
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="db.js"></script>
+<script src="backup.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
